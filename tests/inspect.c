@@ -16,6 +16,8 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdlib.h>
+#include <sys/stat.h>
 #include <SDL.h>
 #include <SDL_gfxPrimitives.h>
 #include "quirc_internal.h"
@@ -223,16 +225,32 @@ static int sdl_examine(struct quirc *q)
 int main(int argc, char **argv)
 {
 	struct quirc *q;
+	int no_draw = 0;
+	size_t optind;
+	struct stat stats;
+	char *fname = NULL;
+
+	for (optind = 1; optind < argc && argv[optind][0] == '-'; optind++) {
+		switch (argv[optind][1]) {
+		case 'n': no_draw = 1; break;
+		default:
+			fprintf(stderr, "Usage: %s [-n] <testfile.jpg|testfile.png>\n", argv[0]);
+			return -1;
+		}
+	}
+	fname = argv[optind];
+	if (stat(fname, &stats) != 0) {
+		if (argv[optind] == NULL)
+			fprintf(stderr, "Usage: %s [-n] <testfile.jpg|testfile.png>\n", argv[0]);
+		else
+			fprintf(stderr, "Error: file does not exist: %s\n", fname);
+		return 1;
+	}
 
 	printf("quirc inspection program\n");
 	printf("Copyright (C) 2010-2012 Daniel Beer <dlbeer@gmail.com>\n");
 	printf("Library version: %s\n", quirc_version());
 	printf("\n");
-
-	if (argc < 2) {
-		fprintf(stderr, "Usage: %s <testfile.jpg|testfile.png>\n", argv[0]);
-		return -1;
-	}
 
 	q = quirc_new();
 	if (!q) {
@@ -241,10 +259,10 @@ int main(int argc, char **argv)
 	}
 
 	int status = -1;
-	if (check_if_png(argv[1])) {
-		status = load_png(q, argv[1]);
+	if (check_if_png(fname)) {
+		status = load_png(q, fname);
 	} else {
-		status = load_jpeg(q, argv[1]);
+		status = load_jpeg(q, fname);
 	}
 	if (status < 0) {
 		quirc_destroy(q);
@@ -254,11 +272,12 @@ int main(int argc, char **argv)
 	quirc_end(q);
 	dump_info(q);
 
-	if (sdl_examine(q) < 0) {
-		quirc_destroy(q);
-		return -1;
+	if (0 == no_draw) {
+		if (sdl_examine(q) < 0) {
+			quirc_destroy(q);
+			return -1;
+		}
 	}
-
 	quirc_destroy(q);
 	return 0;
 }
